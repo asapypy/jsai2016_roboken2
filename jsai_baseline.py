@@ -42,7 +42,7 @@ parser.add_argument('--initmodelA', '-a', default='',
                     help='Initialize the modelA from given file')
 parser.add_argument('--resume', '-r', default='',
                     help='Resume the optimization from snapshot')
-parser.add_argument('--savefile', '-s', default='jsai_dialogue',
+parser.add_argument('--savefile', '-s', default='jsai_baseline',
                     help='File name sufix to be saved')
 parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
