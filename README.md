@@ -37,7 +37,7 @@ jsai_unk[0-5].{train,valid,test}.data になります。
 unk の後の数字が unk のしきい値になります。unk0 は unk なし，すなわちまったく未知語なしです。反対に unk5 は頻度5以下の単語を unk トークンに置き換えたデータです。
 
 これらのデータを作成したスクリプトが
-jsai_make_dataset.sh です。
+jsai_make_dataset.sh です。ただしこのスクリプトを実行する必要はありません。あくまで，データ作成はどのようにしたのかを記録し，再現可能性を保証するためだけにあります。
 
 # 2 つモデル
 2つのモデルに対応した python scripts が jsai_baseline.py と jsai_dialogue.py です。前者がベースラインモデルで後者が対話モデルになります。
@@ -109,4 +109,58 @@ optional arguments:
 python jsai_baseline.py --train jsai_unk0.valid.data --valid jsai_unk0.valid.data --test jsai_unk0.test.data --seed 3 --unit 10
 ```
 のようにします。上例は一層内のユニット数が 10 だけなので終了も早いです。
+
+# 実行例
+```base
+python jsai_baseline.py --train jsai_unk2.valid.data --test jsai_unk2.valid.data --valid jsai_unk2.valid.data --unit 10 
+### train_data has  3771  words in this corpus.
+### valid_data has  3771  words in this corpus.
+### test_data has  3771  words in this corpus.
+### vocab=691
+### whole_len=3771
+### n_epoch = 100
+### n_units = 10
+### batchsize = 1000
+### bprop_len = 200.000000
+### grad_clip = 1.000000
+### save filename prefix = jsai_baseline
+### learning ratio = 0.100000
+### whole_len= 3771
+### batchsize= 1000   # length of a minibatch
+### jump= 3   # interval between minibatches
+### going to train 300 iterations
+iter 3 training perplexity: 694.519032 (16.790917 iters/sec)
+iter 3 validation perplexity: 692.695520
+iter 6 training perplexity: 694.054443 (31.921336 iters/sec)
+iter 6 validation perplexity: 692.741501
+iter 9 training perplexity: 694.311529 (33.204851 iters/sec)
+iter 9 validation perplexity: 692.876499
+iter 12 training perplexity: 694.085553 (29.397679 iters/sec)
+iter 12 validation perplexity: 692.856240
+iter 15 training perplexity: 693.972151 (31.209090 iters/sec)
+iter 15 validation perplexity: 692.820403
+iter 18 training perplexity: 693.911817 (27.828573 iters/sec)
+iter 18 validation perplexity: 692.738682
+learning rate = 0.0999000999001
+iter 21 training perplexity: 693.780579 (29.984658 iters/sec)
+iter 21 validation perplexity: 692.814926
+learning rate = 0.0998002996005
+iter 24 training perplexity: 693.712654 (30.207519 iters/sec)
+iter 24 validation perplexity: 692.716460
+^CTraining interupted
+save the model
+save the optimizer
+test
+test perplexity: 692.859615994
+```
+
+
+上例のように繰り返し3回ごとに訓練パープレキシティと検証パープレキシティを出力していきます。
+途中を省略しましたが，コントロール＋C で強制終了させたため訓練が中断された(Training interupted)と表示され，その後
+モデルを保存しています。
+
+簡単ですが説明は以上です。
+皆様のご協力に感謝いたします。
+
+公開が遅れましたことをお詫びいたします。
 
