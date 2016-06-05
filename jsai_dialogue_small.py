@@ -338,7 +338,7 @@ def main(datafiles, params):
             # accum_loss += loss_i
 
             # lmA.l1.c  has batchsize X number of neurons states
-            loss_i_ = modelA(xA, tA, lmQ.l1.c)  # add the contents of modelQ
+            loss_i = modelA(xA, tA, lmQ.l1.c)  # add the contents of modelQ
             accum_loss += loss_i
             cur_log_perp += loss_i.data
 
