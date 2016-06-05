@@ -66,66 +66,37 @@ parser.add_argument('--lr', '-z', type=float, default=0.1,
                     help='learning ratio a hyperparameter')
 parser.add_argument('--seed', '-S', type=int, default=1,
                     help='seed of random number generator')
-# parser.add_argument('--test', dest='test', action='store_true')
-# parser.set_defaults(test=False)
 
 args = parser.parse_args()
 xp = cuda.cupy if args.gpu >= 0 else np
 
-# Prepare dataset (preliminary download dataset by ./download.py)
 vocab = {}
 
 def load_data(filename):
     global vocab, n_vocab, rdict, words
-    # words.append('PAD')
     words = []  ### this is a list
     words.append('PAD')
 
-    ### print('### filename=%s' % (filename))
     with open(filename) as f:
         lines = f.readlines()
 
-    line_count = 0
     for line in lines:
         for w in line.strip().split():
             words.append(w)
-        # line_count += 1
 
     dataset = np.ndarray((len(words),), dtype=np.int32)
     for i, word in enumerate(words):
         if word not in vocab:
             vocab[word] = len(vocab)
         dataset[i] = vocab[word]
-        # print('<i=%d, word=%s, dataset[%d]=%s>' % (i, word, i, dataset[i]))
     rdict = dict((v, k) for k, v in vocab.iteritems())
- 
-    # ### print('### line count=%d line has %d lines' %
-    #            (line_count, len(lines)))
-    # n = 0
-    # line = 0
-    # for word in words:
-    #     n += len(word)
-    #     line += 1
-
-    # for i, word in enumerate(words[:200]):
-    #     print('<i=%d,' % (i), end='')
-    #     print('word=%s,' % (word), end='')
-    #     print('words[i]=%s,' % (words[i]), end='')
-    #     print('vocab[word]=%s,' % (vocab[word]), end='')
-    #     print('dataset[i]=%s,' % (dataset[i]), end='')
-    #     print('rdict[vocab[word]]=%s>' % (rdict[vocab[word]]))
-    #     # (i,word,dataset[i],vocab[word],rdict[vocab[word]]))
-    # print('len(words)=%s' % (len(words)))
-    # print('len(dataset)=%s' % (len(words)))
-
-    # for i, word_id in enumerate(dataset[:100]):
-    #     print('<i=%d, word_id=%d' % (i, word_id), end=' ')
-    #     print('rdict[%d]=%s,' % (word_id, rdict[word_id]), end=' ')
-    #     # print('vocab[i],' % (vocab[i]))
-    #     print('dataset[word_id]=%d' % (dataset[word_id]), end=' ')
-    #     print('words[dataset[i]]=%s' % (words[dataset[i]]))
-    # print('%s' % (filename))
-    # sys.exit()
+    # words = open(filename).read().strip().split()
+    # dataset = np.ndarray((len(words),), dtype=np.int32)
+    # for i, word in enumerate(words):
+    #     if word not in vocab:
+    #         vocab[word] = len(vocab)
+    #     dataset[i] = vocab[word]
+    # rdict = dict((v, k) for k, v in vocab.iteritems())
     return dataset
 
 
@@ -143,6 +114,21 @@ def evaluate(dataset, model):
     return math.exp(float(sum_log_perp) / (dataset.size - 1))
 
 
+def make_qdict(dataset):
+    q_flg = True   #  tag with 
+    mat = np.asarray(dataset, dtype=int)
+    for i, w in enumerate(dataset):
+        if q_flg:
+            mat[i] = True
+        else:
+           mat[i] = False
+        if '<eoq>' == rdict[dataset[i]]:
+            q_flg = False
+        if '<eoa>' == rdict[dataset[i]]:
+            q_flg = True
+    return mat
+
+
 def main(datafiles, params):
     """Learning loop
     """
@@ -150,6 +136,37 @@ def main(datafiles, params):
     valid_data = load_data(datafiles['valid'])
     test_data  = load_data(datafiles['test'])
     whole_len  = train_data.shape[0]
+
+    ### 05/Jun/2016, Shin Asakawa wrote belows, to prevent
+    ### over perprexity
+    train_qdict = make_qdict(train_data)
+    valid_qdict = make_qdict(valid_data)
+    test_qdict  = make_qdict(test_data)
+
+    valid_magf = 1. - float(sum(valid_qdict))/float(len(valid_qdict))
+    test_magf = 1. - float(sum(test_qdict))/float(len(test_qdict))
+    # for i, w in enumerate(train_data[:300]):
+    #     print('%s=%d' % (rdict[train_data[i]], train_qdict[i]), end=' ')
+    #     if rdict[train_data[i]] == '<eoq>':
+    #         print()
+    #     if rdict[train_data[i]] == '<eoa>':
+    #         print()
+    # print('\n-----------------')
+    # for i, w in enumerate(valid_data[:300]):
+    #     print('%s=%d' % (rdict[valid_data[i]], valid_qdict[i]), end=' ')
+    #     if rdict[valid_data[i]] == '<eoq>':
+    #         print()
+    #     if rdict[valid_data[i]] == '<eoa>':
+    #         print()
+    # print('\n-----------------')
+    # for i, w in enumerate(test_data[:300]):
+    #     print('%s=%d' % (rdict[test_data[i]], test_qdict[i]), end=' ')
+    #     if rdict[test_data[i]] == '<eoq>':
+    #         print()
+    #     if rdict[test_data[i]] == '<eoa>':
+    #         print()
+    # print('\n-----------------')
+    # sys.exit()
 
     print('### train_data has ', len(train_data), ' words in this corpus.')
     print('### valid_data has ', len(valid_data), ' words in this corpus.')
@@ -223,7 +240,48 @@ def main(datafiles, params):
             t = chainer.Variable(xp.asarray(
                 [train_data[(jump * iter + j + 1) % whole_len]
                  for j in batch_idxs]))
-            loss_i = model(x, t)
+
+            x_qdict = np.asarray([train_qdict[(jump * iter + j) % whole_len]
+                                  for j in batch_idxs])
+            t_qdict = np.asarray([train_qdict[(jump * iter + j + 1) % whole_len]
+                                  for j in batch_idxs])
+            # print('len(x)=%d' % (len(x)))
+            # print('len(x_qdict)=%d' % (len(x_qdict)))
+
+            # for i, w in enumerate(x.data[:300]):
+            #     print('%s=%d' % (rdict[x.data[i]], x_qdict[i]), end=' ')
+            #     if rdict[x.data[i]] == '<eoq>':
+            #         print()
+            #     if rdict[x.data[i]] == '<eoa>':
+            #         print()
+            # print()
+            # print(x_qdict[:300])
+            # print(sum(x_qdict[:300]))
+            # print(len(x_qdict[:300]))
+            # print(1. - float(sum(x_qdict[:300]))/float(len(x_qdict[:300])))
+
+            # print(sum(x_qdict))
+            # print(len(x_qdict))
+            # print(1. - float(sum(x_qdict))/float(len(x_qdict)))
+            # magf = 1. - float(sum(x_qdict))/float(len(x_qdict))
+            # print('magf=%f' % (magf))
+            # for i, w in enumerate(x.data[:300]):
+            #     print('%s=%d' % (rdict[t.data[i]], t_qdict[i]), end=' ')
+            #     if rdict[t.data[i]] == '<eoq>':
+            #         print()
+            #     if rdict[t.data[i]] == '<eoa>':
+            #         print()
+            # print()
+            # sys.exit()
+            magf = 1. - float(sum(x_qdict))/float(len(x_qdict))
+            loss_i = model(x, t) * magf
+            # loss_i = model(x, t)
+            # print('type(loss_i)=%s' % (type(loss_i)))
+            # print('type(loss_i.data)=%s' % (type(loss_i.data)))
+            # print('loss_i.data.ndim=%s' % (loss_i.data.ndim))
+            # print('loss_i.data.size=%s' % (loss_i.data.size))
+            # print('loss_i.data=%f' % (loss_i.data))
+
             accum_loss += loss_i
             cur_log_perp += loss_i.data
 
@@ -246,14 +304,16 @@ def main(datafiles, params):
                 epoch += 1
                 # print('evaluate')
                 now = time.time()
-                perp = evaluate(valid_data, model)
-                print('iter %d validation perplexity: %f' % (iter + 1, perp))
+                prep_origin = evaluate(valid_data, model)
+                perp = prep_origin * valid_magf
+                print('iter %d validation perplexity: %f (=%f * %f)' %
+                      (iter + 1, perp, prep_origin, valid_magf))
                 cur_at += time.time() - now  # skip time of evaluation
 
                 if epoch >= 6:
-		    optimizer.lr /= 1.001
-		    # optimizer.lr /= 1.2
-		    print('learning rate =', optimizer.lr)
+                    optimizer.lr /= 1.001
+                    # optimizer.lr /= 1.2
+                    print('learning rate =', optimizer.lr)
 
             sys.stdout.flush()
 
@@ -269,8 +329,10 @@ def main(datafiles, params):
 
     # Evaluate on test dataset
     print('test')
-    test_perp = evaluate(test_data, model)
-    print('test perplexity:', test_perp)
+    test_pref_origin = evaluate(test_data, model)
+    test_perp = test_pref_origin * test_magf
+    print('test perplexity: %f = (%f * %f) ' %
+          (test_perp, test_pref_origin, test_magf))
 
 
 if __name__ == '__main__':

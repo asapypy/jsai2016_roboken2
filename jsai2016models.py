@@ -78,6 +78,30 @@ class RNNLM(chainer.Chain):
         return y
 
 
+class RNNLMs(chainer.Chain):
+
+    """Recurrent neural net languabe model for penn tree bank corpus.
+    This is a sigle LSTM layer model
+
+    """
+    def __init__(self, n_vocab, n_units, train=True):
+        super(RNNLMs, self).__init__(
+            embed=L.EmbedID(n_vocab, n_units),
+            l1=L.LSTM(n_units, n_units),
+            l2=L.Linear(n_units, n_vocab),
+        )
+        self.train = train
+
+    def reset_state(self):
+        self.l1.reset_state()
+
+    def __call__(self, x):
+        h0 = self.embed(x)
+        h1 = self.l1(F.dropout(h0, train=self.train))
+        y = self.l2(F.dropout(h1, train=self.train))
+        return y
+
+
 class JSAI2016DIALOGUE_CLASSIFIER(chainer.link.Chain):
 
     """For JSAI2016,
@@ -91,6 +115,37 @@ class JSAI2016DIALOGUE_CLASSIFIER(chainer.link.Chain):
                  context=None,
                  lossfun=softmax_cross_entropy.softmax_cross_entropy):
         super(JSAI2016DIALOGUE_CLASSIFIER, self).__init__(predictor=predictor)
+        self.lossfun = lossfun
+        self.y = None
+        self.loss = None
+        self.accuracy = True
+        if context != None:
+            self.context = context
+
+    def __call__(self, x, t, context=None):
+        self.y = None
+        self.loss = None
+        self.accuracy = True
+        self.y = self.predictor(x, context)
+        self.loss = self.lossfun(self.y, t)
+        if self.compute_accuracy:
+            self.accuracy = accuracy.accuracy(self.y, t)
+        return self.loss
+
+class JSAI2016DIALOGUE_CLASSIFIERs(chainer.link.Chain):
+
+    """For JSAI2016,
+    Definition of a new class of a classifier, which takes
+    3 arguments.
+    This is a single LSTM layer model
+    """
+    compute_accuracy = True
+
+    def __init__(self,
+                 predictor,
+                 context=None,
+                 lossfun=softmax_cross_entropy.softmax_cross_entropy):
+        super(JSAI2016DIALOGUE_CLASSIFIERs, self).__init__(predictor=predictor)
         self.lossfun = lossfun
         self.y = None
         self.loss = None
@@ -145,6 +200,42 @@ class JSAI2016DIALOGUE(chainer.Chain):
             # This is our dialogue model for JSAI2016
         hidden2 = self.layer2(F.dropout(hidden1, train=self.train))
         y       = self.layer3(F.dropout(hidden2, train=self.train))
+        return y
+
+class JSAI2016DIALOGUEs(chainer.Chain):
+    """For JSAI2016,
+       Recurrent neural net languabe model for penn tree bank corpus.
+       This is a single LSTM layer model
+
+       We can define 3 parallel neural network models.
+       1) Normal language model
+       2) Q: Questioner model
+       3) A: Respondant model
+       When a repsondant will get a <cntnxt> token, then 
+       it will start to answer the question that the questioner would ask.
+       We assumed an additional input units in the hidden1 layer to add
+       the content about the question.
+    """
+
+    def __init__(self, n_vocab, n_units, context, train=True):
+        super(JSAI2016DIALOGUEs, self).__init__(
+            embed =L.EmbedID(n_vocab,           n_units),
+            layer1=L.LSTM(   n_units + n_units, n_units),
+            layer2=L.Linear( n_units,           n_vocab),
+        )
+        self.train = train
+
+    def reset_state(self):
+        self.layer1.reset_state()
+
+    def __call__(self, x, context):
+        hidden0 = self.embed(x)
+
+        hidden1 = self.layer1(F.activation.relu.relu(
+            F.array.concat.concat((hidden0, context))))
+            # context implies the LSTM cell of a Questionaire.
+            # This is our dialogue model for JSAI2016
+        y       = self.layer2(F.dropout(hidden1, train=self.train))
         return y
 
 
